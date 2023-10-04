@@ -1,0 +1,282 @@
+---
+title: "CFA: Cultural Consumption at Cyprus"
+author: "Victoria Bolotova"
+date: "22 06 2022"
+output: 
+    html_document:
+      theme: cosmo
+      code_folding: show
+      toc: true
+      toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+load("Cyprus.RData")
+```
+
+# Task 1
+
+```{r}
+library(dplyr)
+efa <- Cyprus %>% 
+  select(opera, cinema, theatre, concert, lib, sites, museum, tv, books)
+```
+
+## Checking data adequacy
+
+### KMO
+
+```{r}
+library(psych)
+KMO(efa) 
+```
+
+* Average KMO equals to 0.81, which is a good result.
+
+### Bartlett test of Sphericity
+
+The null hypotheses is that the variance-covariance matrix is an identity matrix (variables are uncorrelated).
+
+```{r}
+r <- cor(efa)
+cortest.bartlett(r)
+```
+
+* P-value indicates significant result, which is good. It means that our variables are correlated.
+
+* According to tests above, we can conclude that we can use this data for FA.
+
+## Choose the number of factors
+
+### Eigenvalues
+
+* Should be above 1
+
+```{r}
+ev <- eigen(r) 
+ev$values
+```
+
+* Only 2 variables have eigenvalues higher than 1. Thus, it tells us that we should extract 2 factors.
+
+### Parallel Analysis screen plot
+
+* Helps determine the number of factors
+
+```{r}
+library(nFactors)
+nS <- nScree(x=ev$values)#get data for scree plot
+plotnScree(nS)
+```
+
+* Most tests say we should extract 2 factors
+
+
+## Models
+
+### With all variables
+
+```{r}
+library(GPArotation)
+fit1  = fa(efa, nfactors = 2, n.iter = 100, fm = "ml")
+fit1 
+```
+
+- Interpretation:
+  - Acceptable cumulative var (0.36), but still it is low. It means that 36% of variance is explained by 2 factors (should be > 0.5 to be good result)
+  - RMSR is 0.05, which is acceptable
+  - RMSEA index equals to 0.083, which is too high, unfortunately (<.08 acceptable, <.05 excellent)
+  - Tucker Lewis Index is close to acceptable (0.86) (>.90 acceptable, >.95 excellent) 
+  - Mean item complexity 1.3, which is pretty good 
+  - As for Proportion Var and Proportion Explained, everything is looking good. As for Proportion Var (proportion of variance which is explained by each factor), the last factor (MR2) explains 15% of variance. According to the rule of thumb, one factor should explain at least 10% of variance. Thus, it indicates that we should not reduce the number of factors.
+  
+- Loadings:
+  - lib does not have factor loadings higher than 0.29, moreover, its uniqueness is very high (0.83)
+  - we also have problems with museum variable because it has very similar factor loadings (0.4 and 0.38), which is not acceptable
+  - other manifest variables have good factor loadings
+  - thus, it is necessary to delete only 2 variables: lib and museum
+  
+- Rotations did not help in improving the model
+  
+### Without 2 variables
+  
+```{r}
+efa_7 <- efa %>%
+  select(- lib, - museum)
+```
+
+```{r}
+library(GPArotation)
+fit2  = fa(efa_7, nfactors = 2, n.iter = 100, fm = "ml")
+fit2 
+```
+
+- Interpretation:
+  - Cumulative var becomes higher (from 0.36 to 0.41). It means that 41% of variance is explained by 2 factors (should be > 0.5 to be good result)
+  - RMSR also becomes better (from 0.05 to 0.04), which is good
+  - RMSEA index equals to 0.081, which is still too high, unfortunately, but acceptable (<.08 acceptable, <.05 excellent). It also become better after deleting 2 variables (was 0.083)
+  - Tucker Lewis Index is very close to acceptable (0.88) (>.90 acceptable, >.95 excellent), also becomes a little bit better
+  - Mean item complexity 1.2, which is pretty good. For previous model is was 1.3
+  - As for Proportion Var and Proportion Explained, everything is looking good. 
+
+- Now all factor loadings looks pretty good! 
+
+- Rotations did not help in improving the model
+
+  
+## Visualisation
+  
+```{r}
+fa.diagram(fit2)
+```
+
+- ML2: Getting out from home for cultural consumption - outside. For extroverts
+  - concert
+  - theatre
+  - cinema
+  - opera
+  
+- ML1: Cultural consumption at home (except for sites) - inside. For introverts
+  - tv
+  - sites
+  - books
+
+I think that sites also entered to this factor, because it is kinda static form of culture (not so lively as concert, theatre, cinema, opera). May be it is not so crowed as places such as concert, opera, etc. That is why people who prefer cultural consumption at home, also prefer visiting sites. May be these people are more introverts, than those who like concerts, theaters, cinemas and operas.
+
+
+# Task 2
+
+## Specification of the model
+
+```{r}
+library(lavaan)
+
+model1 <- '
+for_extroverts =~ opera + cinema + theatre + concert
+for_introverts =~ sites + tv + books
+'
+```
+
+## CFA
+
+```{r}
+fit1 = cfa(model1, data = efa_7)
+summary(fit1, standardized=TRUE, fit.measures=TRUE, modindices=TRUE)
+```
+
+* Tucker-Lewis Index (TLI) is close to acceptable (0.88)
+* Comparative Fit Index (CFI) is also very close to acceptable (0.93)
+* RMSEA index equals to 0.085 (<.08 acceptable, <.05 excellent), which is close to acceptable
+* SRMR equals to 0.051, which is reasonably close fit.
+
+-> In accordance with above indexes, the model is pretty good, but
+
+* P-value of Chi-square equals to 0.000, which says to us that the model is different from data, but all important indexes confirmed that the model is good, thus, we can be sure in this model.
+
+* As for factor loadings, all of them are significant according to p-values (0.000). 
+
+
+## Find problematic parameteris by MI and EPC
+
+* MI (threshold is 3.84 - should be less than this value) shows how Chi-square would change if we estimate some additional parameters.
+* EPC shows us the value to what the corresponding parameter equals to (correlation). Standardized EPC |0.2| indicate problematic misspecifications.
+
+```{r}
+mi_1 <- modindices(fit1)
+mi_1[mi_1$mi > 3.84, 1:5]
+```
+
+- The highest modification indices (correlations) have parameters: 
+  - cinema ~~ concert 20.290 and 0.097
+  - sites ~~ books 15.945 and -0.264
+  - opera ~~ theater 16.003 and 0.047
+
+## Improve the model
+
+```{r}
+model2 <- '
+for_extroverts =~ opera + cinema + theatre + concert
+for_introverts =~ sites + tv + books
+cinema ~~ concert
+opera ~~ theatre
+sites ~~   books
+'
+```
+
+
+```{r}
+fit2 = cfa(model2, data = efa_7)
+summary(fit2, standardized=TRUE, fit.measures=TRUE, modindices=TRUE)
+```
+
+* Tucker-Lewis Index (TLI) becomes much better, now it is very good (0.98)
+* Comparative Fit Index (CFI) also becomes much better, now it is very good (0.99)
+* RMSEA index equals to 0.034 (<.08 acceptable, <.05 excellent), which is excellent now
+* SRMR equals to 0.025, which indicates very good fit.
+
+-> In accordance with above indexes, the model is very good!
+
+* To sum up, model become better after adding correlation among variables that is not fully explained by one common factor. 
+* However, to be sure that the second model is significantly better than the first one we should run anova.
+
+## Anova
+
+```{r}
+anova(fit1, fit2)
+```
+
+* Anova result shows that the second model is significantly better than the first one. It means that the second model explains data better, than the first one.
+* We have lost 3 degree of freedom
+* Chi-square’s difference is 37, which is pretty high
+* Thus, the second model is better
+
+# Task 3
+
+## Saving factor scores
+
+```{r}
+Cyprus[,14:15] <- lavPredict(fit2, method = "regression")
+colnames(Cyprus)[14:15] <- c("for_extroverts", "for_introverts")
+```
+
+## Models
+
+## For extroverts
+
+```{r}
+labs <- c("Constant", "Gender (Female)", "Age when completed education", "Employment status (Employed)", "Employment status (Not working)", "Age")
+mod1 <- lm(for_extroverts ~ gender + edu + stat2 + age, data = Cyprus)
+library(sjPlot)
+tab_model(mod1, pred.labels = labs, dv.labels = "Activities for extroverts")
+```
+
+* For females the predicted frequency of cultural practices outside the home (for extroverts)  is on 0.03 higher, than for males on average, holding everything else constant.
+
+* The relationship between age when completed education and frequency of cultural practices outside the home is significant and positive. For each additional increase in age when completed education predicted frequency of cultural practices outside the home is 0.01 higher, on average, holding everything else constant.
+
+* Other variables are not significant at explaining frequency of cultural practices outside the home (for extroverts) 
+
+* Adjusted R-squared is 0.16, it means that only 16% of variance in frequency of cultural practices outside the home (for extroverts) can be explained by the the model.
+
+
+## For extroverts
+
+```{r}
+mod1 <- lm(for_introverts ~ gender + edu + stat2 + age, data = Cyprus)
+library(sjPlot)
+tab_model(mod1, pred.labels = labs, dv.labels = "Activities for introverts")
+```
+
+* For females the predicted frequency of cultural practices for introverts is on 0.24 higher, than for males on average, holding everything else constant.
+
+* The relationship between age when completed education and frequency of cultural practices for introverts is significant and positive. For each additional increase in age when completed education predicted frequency of cultural practices for introverts is on 0.04 higher, on average, holding everything else constant. 
+
+* The relationship between age and frequency of cultural practices for introverts is significant and positive. For each additional increase in age when completed education predicted frequency of cultural practices for introverts is on 0.01 higher, on average, holding everything else constant. 
+
+* Employment status is not significantly associated with taking part in activities for introverts. 
+
+* Adjusted R-squared is 0.08, it means that only 8% of variance in frequency of cultural practices for introverts can be explained by the the model.
